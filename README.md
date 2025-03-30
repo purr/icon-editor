@@ -43,13 +43,16 @@ python main.py
 
 ### Cutout Mode
 
-Cutout Mode allows you to use SVG shapes as templates to create transparent cutouts in backgrounds or images:
+Cutout Mode allows you to use SVG shapes as templates to create transparent cutouts in backgrounds and images:
 
 1. Upload or select an SVG
 2. Position it where you want the cutout to appear
 3. Check the "Cutout Mode" checkbox
-4. The SVG will display with a thin red dotted outline to show the cutout area
-5. Export the image to get a file with a transparent area in the shape of your SVG
+4. The SVG will display with a red outline and semi-transparent fill in the editor (UI only)
+5. When exported, the SVG shape will be 100% transparent with no red lines or fill
+6. Export the image to get a file with a clean transparent cutout in the shape of your SVG
+
+Note: The red outline and semi-transparent fill are ONLY visual indicators in the editor interface to help you position the cutout. They NEVER appear in the exported image. The actual export will have perfectly transparent cutouts with no traces of red outlines or fill.
 
 ## Project Structure
 
@@ -96,6 +99,8 @@ This project is open source.
 <details>
 <summary>Click to expand version history</summary>
 
+- v1.9.7 - Fixed cutout mode export to ensure 100% transparency with no red outlines or fill
+- v1.9.6 - Improved visual indicators in cutout mode for better positioning
 - v1.9.2 - Reduced SVG outline thickness in cutout mode for more precise editing
 - v1.9.1 - Simplified color picker to use hex colors only for a cleaner interface
 - v1.9.0 - Enhanced CSS for custom color inputs with better visibility and spacing

@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentState = {
     selectedSvg: null,
     svgElement: null,
-    svgSize: 20, // Hard-coded to 20% default size
+    svgSize: 40, // Changed from 20% to 40% default size
     originalSvgWidth: 100,
     originalSvgHeight: 100,
     svgWidth: 100,
@@ -67,8 +67,8 @@ document.addEventListener("DOMContentLoaded", () => {
   updateCanvasSize();
 
   // Ensure slider and input display the correct default value
-  svgSizeSlider.value = 20;
-  svgSizeInput.value = 20;
+  svgSizeSlider.value = 40;
+  svgSizeInput.value = 40;
 
   // Event listeners
   svgItems.forEach((item) => {
@@ -94,11 +94,42 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function updateSVGSize(sizePercent) {
+    if (!currentState.svgElement) return;
+
+    // Store the current dimensions and center point before resizing
+    const oldWidth = currentState.svgWidth;
+    const oldHeight = currentState.svgHeight;
+    const oldCenterX = currentState.position.x + oldWidth / 2;
+    const oldCenterY = currentState.position.y + oldHeight / 2;
+
+    // Update the size percentage
     currentState.svgSize = sizePercent;
-    // Calculate SVG dimensions based on canvas size (not original SVG size)
+
+    // Calculate new SVG dimensions based on canvas size
     currentState.svgWidth = (currentState.canvasWidth * sizePercent) / 100;
     currentState.svgHeight = (currentState.canvasHeight * sizePercent) / 100;
+
+    // Calculate new top-left position to maintain the center point
+    currentState.position.x = oldCenterX - currentState.svgWidth / 2;
+    currentState.position.y = oldCenterY - currentState.svgHeight / 2;
+
+    // Ensure the SVG stays within canvas bounds
+    const maxX = currentState.canvasWidth - currentState.svgWidth;
+    const maxY = currentState.canvasHeight - currentState.svgHeight;
+    currentState.position.x = Math.max(
+      0,
+      Math.min(currentState.position.x, maxX)
+    );
+    currentState.position.y = Math.max(
+      0,
+      Math.min(currentState.position.y, maxY)
+    );
+
+    // Update the SVG with new size and position
     updateSVG();
+    // Also update the position inputs
+    positionXInput.value = Math.round(currentState.position.x);
+    positionYInput.value = Math.round(currentState.position.y);
   }
 
   // Custom color picker toggle functionality
@@ -430,11 +461,10 @@ document.addEventListener("DOMContentLoaded", () => {
       selectedItem.classList.add("active");
     }
 
-    // Save current position before loading new SVG
+    // Save current position and size before loading new SVG
     const previousPosition = { ...currentState.position };
-
-    // ALWAYS treat as first SVG for sizing purposes to ensure 20% size is applied
-    const isFirstSvg = true;
+    const previousSize = currentState.svgSize;
+    const isFirstSvg = currentState.selectedSvg === null;
 
     // Update state
     currentState.selectedSvg = filename;
@@ -468,15 +498,24 @@ document.addEventListener("DOMContentLoaded", () => {
         currentState.originalSvgWidth = width;
         currentState.originalSvgHeight = height;
 
-        // ALWAYS FORCE 20% SIZE - NO CALCULATION
-        // Set a fixed 20% size for all SVGs
-        currentState.svgSize = 20;
-        svgSizeSlider.value = 20;
-        svgSizeInput.value = 20;
+        // Use the previous size if this isn't the first SVG, otherwise use default 40%
+        if (isFirstSvg) {
+          // First SVG - use the default 40% size
+          currentState.svgSize = 40;
+          svgSizeSlider.value = 40;
+          svgSizeInput.value = 40;
+        } else {
+          // Maintain the previous size for subsequent SVGs
+          currentState.svgSize = previousSize;
+          svgSizeSlider.value = previousSize;
+          svgSizeInput.value = previousSize;
+        }
 
-        // Calculate width and height based on fixed 20% of canvas
-        currentState.svgWidth = (currentState.canvasWidth * 20) / 100;
-        currentState.svgHeight = (currentState.canvasHeight * 20) / 100;
+        // Calculate width and height based on the current size
+        currentState.svgWidth =
+          (currentState.canvasWidth * currentState.svgSize) / 100;
+        currentState.svgHeight =
+          (currentState.canvasHeight * currentState.svgSize) / 100;
 
         // Remove any existing SVG viewBox/width/height attributes - we'll control these
         svgElement.removeAttribute("width");
@@ -484,8 +523,6 @@ document.addEventListener("DOMContentLoaded", () => {
         svgElement.style.width = `${currentState.svgWidth}px`;
         svgElement.style.height = `${currentState.svgHeight}px`;
         svgElement.style.position = "absolute";
-        // Don't hide the original SVG yet - updateSVG will handle displaying the proper element
-        // svgElement.style.display = "none";
 
         // Add to canvas
         canvas.appendChild(svgElement);
@@ -538,6 +575,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.error) {
           alert(data.error);
         } else {
+          // Get the current size and position before we clear the SVG element
+          const currentSize = currentState.svgElement
+            ? currentState.svgSize
+            : 40;
+          const currentPosition = { ...currentState.position };
+
+          // Remember if this is the first SVG
+          const isFirstSvg = currentState.selectedSvg === null;
+
           // Always reset the SVG element to force new size calculation
           if (currentState.svgElement) {
             if (currentState.svgElement.parentNode === canvas) {
@@ -552,13 +598,26 @@ document.addEventListener("DOMContentLoaded", () => {
             canvas.removeChild(existingSvgContainer);
           }
 
-          // Reset the size to 20% before selecting the new SVG
-          currentState.svgSize = 20;
-          svgSizeSlider.value = 20;
-          svgSizeInput.value = 20;
+          // Keep the current size or use default for new upload
+          currentState.svgSize = currentSize;
+          svgSizeSlider.value = currentSize;
+          svgSizeInput.value = currentSize;
 
-          // Select the newly uploaded SVG with 20% size
-          selectSVG(data.filename);
+          // Temporarily store the current position
+          if (!isFirstSvg) {
+            const tempPosition = { ...currentPosition };
+
+            // Select the newly uploaded SVG while maintaining size and position
+            selectSVG(data.filename);
+
+            // Restore the position after selecting the new SVG
+            // Only if we had a previous SVG (not first upload)
+            currentState.position = tempPosition;
+            updateSVGPosition();
+          } else {
+            // First SVG upload - use default centered position
+            selectSVG(data.filename);
+          }
         }
       })
       .catch((error) => {
@@ -588,7 +647,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Add a red dotted outline for cutout mode
     if (currentState.cutoutMode) {
-      svgContainer.style.border = "1px dotted #ff0000";
+      // Use a finer dotted border with smaller dots and higher frequency
+      svgContainer.style.border = "0.5px dotted #ff0000";
       svgContainer.style.boxSizing = "border-box";
       // Add a clear indicator that this is a cutout
       svgContainer.setAttribute("data-cutout", "true");
@@ -609,31 +669,82 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Apply SVG color and opacity if not in cutout mode
     if (!currentState.cutoutMode) {
-      // Find all shapes within the SVG and apply the color
-      const shapes = svgClone.querySelectorAll(
-        "path, rect, circle, ellipse, line, polyline, polygon"
+      // First, apply a CSS style to force color override at the SVG level
+      const styleElement = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "style"
       );
-      shapes.forEach((shape) => {
-        // Support for both hex and rgba colors
-        shape.setAttribute("fill", currentState.svgColor);
-        shape.removeAttribute("stroke"); // Remove any existing stroke
+      styleElement.textContent = `
+        * {
+          fill: ${currentState.svgColor} !important;
+          stroke: none !important;
+          color: ${currentState.svgColor} !important;
+        }
+      `;
+      svgClone.insertBefore(styleElement, svgClone.firstChild);
+
+      // Find and modify all elements that could have color attributes
+      const allElements = svgClone.querySelectorAll("*");
+      allElements.forEach((element) => {
+        // Remove any inline styles that might override our color
+        if (element.hasAttribute("style")) {
+          const style = element.getAttribute("style");
+          const newStyle = style
+            .replace(/fill\s*:\s*[^;]+;?/gi, "")
+            .replace(/stroke\s*:\s*[^;]+;?/gi, "")
+            .replace(/color\s*:\s*[^;]+;?/gi, "");
+
+          if (newStyle.trim()) {
+            element.setAttribute("style", newStyle);
+          } else {
+            element.removeAttribute("style");
+          }
+        }
+
+        // Set the fill color explicitly on every element
+        element.setAttribute("fill", currentState.svgColor);
+
+        // Remove any stroke
+        element.removeAttribute("stroke");
+        element.removeAttribute("stroke-width");
+        element.removeAttribute("stroke-linecap");
+        element.removeAttribute("stroke-linejoin");
+        element.removeAttribute("stroke-dasharray");
+
+        // Remove potential color-related attributes
+        element.removeAttribute("fill-opacity");
+        element.removeAttribute("color");
       });
 
-      // Apply opacity to the entire SVG (this works for both hex and rgba)
+      // Apply opacity to the entire SVG
       svgClone.style.opacity = currentState.svgOpacity;
     } else {
-      // For cutout mode, we'll make the shapes invisible except for the outline
-      const shapes = svgClone.querySelectorAll(
-        "path, rect, circle, ellipse, line, polyline, polygon"
+      // For cutout mode, we'll make the shapes semi-transparent to visually indicate the cutout area
+      // but keep their shape intact since the entire SVG will be cut out (not just the red lines)
+      const styleElement = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "style"
       );
-      shapes.forEach((shape) => {
-        // Make the fill completely transparent
-        shape.setAttribute("fill", "rgba(0, 0, 0, 0)");
+      styleElement.textContent = `
+        * {
+          fill: rgba(255, 0, 0, 0.2) !important;
+          stroke: #ff0000 !important;
+          stroke-width: 1 !important;
+          stroke-dasharray: 3,2 !important;
+        }
+      `;
+      svgClone.insertBefore(styleElement, svgClone.firstChild);
+
+      // Also set attributes on all elements to ensure compatibility
+      const allElements = svgClone.querySelectorAll("*");
+      allElements.forEach((element) => {
+        // Make the fill semi-transparent red to indicate cutout area
+        element.setAttribute("fill", "rgba(255, 0, 0, 0.2)");
 
         // Add a red stroke to show the cutout boundary
-        shape.setAttribute("stroke", "#ff0000");
-        shape.setAttribute("stroke-width", "1.75"); // Reduced from 3.5 to 1.75 (half as thick)
-        shape.setAttribute("stroke-dasharray", "8,3"); // Keeping the dash pattern the same
+        element.setAttribute("stroke", "#ff0000");
+        element.setAttribute("stroke-width", "1");
+        element.setAttribute("stroke-dasharray", "3,2");
       });
 
       // Keep the SVG fully visible
@@ -853,7 +964,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Fix the SVG width and height calculation
     const svgSizePercent = parseFloat(
-      document.getElementById("svg-size-input").value || 20
+      document.getElementById("svg-size-input").value || 40
     );
     const svgWidth = Math.round((width * svgSizePercent) / 100);
     const svgHeight = Math.round((height * svgSizePercent) / 100);
@@ -946,7 +1057,18 @@ document.addEventListener("DOMContentLoaded", () => {
           shapes.forEach((shape) => {
             shape.setAttribute("fill", "#000000"); // Solid black for the mask
             shape.setAttribute("stroke", "none"); // No stroke
+            // Remove any styling that might include strokes or red outlines
+            shape.removeAttribute("style");
+            // Remove any stroke-related attributes
+            shape.removeAttribute("stroke-width");
+            shape.removeAttribute("stroke-dasharray");
+            shape.removeAttribute("stroke-linecap");
+            shape.removeAttribute("stroke-linejoin");
           });
+
+          // Also remove any style elements to prevent CSS interfering with mask
+          const styleElements = exportSvg.querySelectorAll("style");
+          styleElements.forEach((el) => el.parentNode.removeChild(el));
 
           // Create a new SVG blob for the mask
           const maskSvgString = new XMLSerializer().serializeToString(
